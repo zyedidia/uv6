@@ -1,0 +1,45 @@
+module file;
+
+import core.lib;
+import core.alloc;
+
+import fd;
+import proc;
+import sys;
+
+FDFile* filenew(int kfd) {
+    FDFile* ff = knew!(FDFile)();
+    if (!ff)
+        return null;
+    ff.dev = cast(void*) kfd;
+    ff.read = &fileread;
+    ff.write = &filewrite;
+    ff.lseek = &filelseek;
+    ff.stat = &filestat;
+    ff.close = &fileclose;
+    return ff;
+}
+
+private int filefd(void* dev) {
+    return cast(int) dev;
+}
+
+ssize fileread(void* dev, Proc* p, ubyte[] buf) {
+    return syserr(read(filefd(dev), buf.ptr, buf.length));
+}
+
+ssize filewrite(void* dev, Proc* p, ubyte[] buf) {
+    return syserr(write(filefd(dev), buf.ptr, buf.length));
+}
+
+ssize filelseek(void* dev, Proc* p, ssize off, uint whence) {
+    return syserr(lseek(filefd(dev), off, whence));
+}
+
+int filestat(void* dev, Proc* p, Stat* st) {
+    return syserr(fstatat(filefd(dev), "".ptr, st, AT_EMPTY_PATH));
+}
+
+int fileclose(void* dev, Proc* p) {
+    return syserr(close(filefd(dev)));
+}

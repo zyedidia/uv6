@@ -1,0 +1,6 @@
+*.o
+*.dep
+*.elf
+.knit
+user/build
+uv6

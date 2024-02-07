@@ -1,0 +1,3 @@
+[submodule "user/picolibc"]
+	path = user/picolibc
+	url = https://github.com/zyedidia/picolibc

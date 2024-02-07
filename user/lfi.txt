@@ -1,0 +1,11 @@
+[binaries]
+c = '/opt/lfi/toolchain/bin/lfi-clang'
+ar = 'ar'
+strip = 'strip'
+exe_wrapper = 'lfi-run'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
