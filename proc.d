@@ -67,6 +67,10 @@ void procentry(Proc* p) {
 //     kstart(null, null, &schedctx);
 // }
 
+int procpid(Proc* p) {
+    return cast(int) (p.base >> 32);
+}
+
 uintptr procaddr(Proc* p, uintptr addr) {
     return (cast(uint) addr) | p.base;
 }
@@ -75,4 +79,19 @@ ubyte[] procbuf(Proc* p, uintptr buf, usize size) {
     buf = procaddr(p, buf);
     // TODO: checks
     return (cast(ubyte*) buf)[0 .. size];
+}
+
+const(char)* procpath(Proc* p, uintptr path) {
+    path = procaddr(p, path);
+    // TODO: checks
+    const(char)* str = cast(const(char)*) path;
+    usize len = strnlen(str, PATH_MAX);
+    if (str[len] != 0)
+        return null;
+    return str;
+}
+
+T* procobj(T)(Proc* p, uintptr ptr) {
+    ubyte[] buf = procbuf(p, ptr, T.sizeof);
+    return cast(T*) buf.ptr;
 }

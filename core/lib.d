@@ -38,6 +38,7 @@ ssize read(int fd, void* buf, usize count);
 ssize write(int fd, void* buf, usize count);
 ssize lseek(int fd, ssize offset, int whence);
 int close(int fd);
+int mkdirat(int dirfd, const(char)* pathname, int mode);
 
 void* fopen(const(char)* path, const(char)* mode);
 void* fdopen(int fd, const(char)* mode);

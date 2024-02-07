@@ -1,0 +1,14 @@
+local cc := /opt/lfi/toolchain/bin/lfi-clang
+local picolibc_lib := build/install/lib
+local picolibc_include := build/install/include
+
+return b{
+    $ all:VB: hello
+
+    $ %: %.o syscall.o crt0.o
+        $cc -nostdlib -L$picolibc_lib $input -lc -static -o $output
+    $ %.o: %.S
+        $cc -c $input -o $output
+    $ %.o: %.c
+        $cc -nostdlib -I$picolibc_include -O2 -c $input -o $output
+}

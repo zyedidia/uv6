@@ -7,7 +7,14 @@ import fd;
 import proc;
 import sys;
 
-FDFile* filenew(int kfd) {
+FDFile* filenew(const(char)* name, int flags, int mode) {
+    int kfd = syserr(openat(AT_FDCWD, name, flags, mode));
+    if (kfd < 0)
+        return null;
+    return filefdnew(kfd);
+}
+
+FDFile* filefdnew(int kfd) {
     FDFile* ff = knew!(FDFile)();
     if (!ff)
         return null;

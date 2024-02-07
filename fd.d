@@ -47,11 +47,15 @@ FDFile* fdget(FDTable* t, int fd) {
     return null;
 }
 
+void fdrelease(FDFile* f) {
+    f.refs--;
+    if (f.refs == 0)
+        kfree(f);
+}
+
 bool fdremove(FDTable* t, int fd) {
     if (fdhas(t, fd)) {
-        t.files[fd].refs--;
-        if (t.files[fd].refs == 0)
-            kfree(t.files[fd]);
+        fdrelease(t.files[fd]);
         t.files[fd] = null;
         return true;
     }
@@ -80,7 +84,7 @@ void fdclear(FDTable* t) {
 }
 
 void fdinit(FDTable* t) {
-    fdassign(t, 0, filenew(fileno(stdin)));
-    fdassign(t, 1, filenew(fileno(stdout)));
-    fdassign(t, 2, filenew(fileno(stderr)));
+    fdassign(t, 0, filefdnew(fileno(stdin)));
+    fdassign(t, 1, filefdnew(fileno(stdout)));
+    fdassign(t, 2, filefdnew(fileno(stderr)));
 }
