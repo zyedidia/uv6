@@ -67,14 +67,14 @@ SyscallFn[] systbl = [
     Sys.CLOSE:  &sysclose,
 ];
 
-uintptr syscall(Proc* p, ulong num,
+uintptr syscall(void* p, ulong num,
         ulong a0, ulong a1, ulong a2, ulong a3, ulong a4, ulong a5) {
     if (num >= systbl.length)
         return Err.NOSYS;
     SyscallFn fn = systbl[num];
     if (fn == null)
         return Err.NOSYS;
-    return fn(p, [a0, a1, a2, a3, a4, a5]);
+    return fn(cast(Proc*) p, [a0, a1, a2, a3, a4, a5]);
 }
 
 uintptr sysexit(Proc* p, ulong[6] args) {

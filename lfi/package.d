@@ -4,12 +4,14 @@ alias LFI = void;
 
 alias LFIProc = void;
 
+alias SyshandlerFn = ulong function(void*, ulong, ulong, ulong, ulong, ulong, ulong, ulong);
+
 struct LFIOptions {
     bool noverify;
     bool fastyield;
     usize pagesize;
     usize stacksize;
-    ulong function(void*, ulong, ulong[6]) syshandler;
+    SyshandlerFn syshandler;
 }
 
 struct LFIProcInfo {
@@ -84,8 +86,12 @@ struct LFIRegs {
     ulong[64] vector;
 };
 
+__gshared {
+    LFI* lfiengine;
+}
+
 extern (C) {
-    LFI* lfi_new(LFIOptions* options);
+    LFI* lfi_new(LFIOptions options);
 
     int lfi_auto_add_vaspaces(LFI* lfi);
 
@@ -101,7 +107,9 @@ extern (C) {
 
     void lfi_delete(LFI* lfi);
 
-    void lfi_proc_start(LFIProc* proc, uintptr entry, void* stack, usize stacksize);
+    void lfi_proc_init_regs(LFIProc* proc, uintptr entry, uintptr sp);
+
+    void lfi_proc_start(LFIProc* proc, void* kstackp);
 
     LFIRegs* lfi_proc_get_regs(LFIProc* proc);
 

@@ -1,5 +1,7 @@
 module sched;
 
+import core.lib;
+
 import queue;
 import proc;
 
@@ -42,6 +44,7 @@ __gshared {
 }
 
 extern (C) void kswitch(Proc* p, Context* oldc, Context* newc);
+extern (C) void kstart(Proc* p, Context* oldc, Context* newc);
 
 Proc* schedrunnable() {
     while (true) {
@@ -53,10 +56,14 @@ Proc* schedrunnable() {
     }
 }
 
-void schedule() {
+void schedule(Proc* init) {
+    qpushf(&runq, init);
+
     while (true) {
         Proc* p = schedrunnable();
         kswitch(p, &schedctx, &p.ctx);
+        if (init.state == PState.EXITED)
+            exit(0);
         if (p.state == PState.RUNNABLE)
             qpushf(&runq, p);
     }

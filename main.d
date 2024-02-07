@@ -4,6 +4,8 @@ import core.lib;
 
 import proc;
 import sched;
+import lfi;
+import sys;
 
 enum Arg {
     NOVERIFY = "noverify",
@@ -55,14 +57,34 @@ extern (C) int main(int argc, const(char)** argv) {
         return 0;
     }
 
-    const(char)* file = argv[i];
-    Proc* p = procfile(file, argc - i, &argv[i], null);
-    if (!p) {
-        fprintf(stderr, "error could not load %s\n", argv[i]);
+    LFIOptions options;
+    options.noverify = flags.noverify;
+    options.pagesize = PAGESIZE;
+    options.stacksize = 128 * 1024;
+    options.syshandler = &syscall;
+
+    lfiengine = lfi_new(options);
+    if (!lfiengine) {
+        fprintf(stderr, "error: failed to initialize LFI\n");
         return 1;
     }
 
-    schedule();
+    int err;
+    if ((err = lfi_auto_add_vaspaces(lfiengine)) < 0) {
+        fprintf(stderr, "error: failed to add vaspaces: %d\n", err);
+        return 1;
+    }
+
+    fprintf(stderr, "max procs: %ld\n", lfi_max_procs(lfiengine));
+
+    const(char)* file = argv[i];
+    Proc* p = procnewfile(file, argc - i, &argv[i], null);
+    if (!p) {
+        fprintf(stderr, "error: could not load %s\n", argv[i]);
+        return 1;
+    }
+
+    schedule(p);
 
     return 0;
 }

@@ -1,15 +1,25 @@
 module proc;
 
 import core.lib;
+import core.alloc;
 
 import sched;
 import lfi;
 import fd;
 import queue;
+import elf;
 
 enum PState {
     RUNNABLE,
     BLOCKED,
+    EXITED,
+}
+
+enum {
+    KSTACKSIZE = 16 * 1024,
+
+    ARGC_MAX = 1024,
+    ARGV_MAX = 1024,
 }
 
 struct Cwd {
@@ -29,22 +39,130 @@ struct Proc {
     void* wq;
     Proc* next;
     Proc* prev;
+
+    align(16) ubyte[KSTACKSIZE] kstack;
 }
 
-Proc* procempty() {
+Proc* procnewempty() {
+    return knew!(Proc)();
+}
+
+Proc* procnewchild(Proc* parent) {
     return null;
 }
 
-Proc* procfile(const(char)* path, int argc, const(char)** argv, const(char)** envp) {
+Proc* procnewfile(const(char)* path, int argc, const(char)** argv, const(char)** envp) {
+    Proc* p = procnewempty();
+    if (!p)
+        goto err1;
+    if (!procfile(p, path, argc, argv, envp))
+        goto err2;
+    fdinit(&p.fdtable);
+    return p;
+
+err2:
+    procfree(p);
+err1:
     return null;
 }
 
-Proc* procparent(Proc* parent) {
-    return null;
+void procfree(Proc* p) {
+    if (p.lp)
+        lfi_remove_proc(lfiengine, p.lp);
+    fdclear(&p.fdtable);
+    kfree(p);
+}
+
+bool procfile(Proc* p, const(char)* path, int argc, const(char)** argv, const(char)** envp) {
+    int fd = openat(AT_FDCWD, path, O_RDONLY, 0);
+    if (fd < 0)
+        return false;
+    void* f = fdopen(fd, "rb");
+    if (!f)
+        return false;
+    ubyte[] buf = readfile(f);
+    if (!buf)
+        return false;
+    ensure(fclose(f) == 0);
+    scope(exit) kfree(buf);
+
+    if (!procsetup(p, buf, argc, argv, envp))
+        return false;
+
+    return true;
+}
+
+bool stacksetup(int argc, const(char)** argv, ref LFIProcInfo info, out uintptr newsp) {
+    // Set up argv and envp.
+    char*[ARGC_MAX] argv_ptrs;
+
+    void* stack_top = info.stack + info.stacksize;
+    char* p_argv = cast(char*) stack_top - PAGESIZE;
+
+    // Write argv string values to the stack.
+    for (int i = 0; i < argc; i++) {
+        usize len = strnlen(argv[i], ARGV_MAX) + 1;
+
+        if (p_argv + len >= stack_top) {
+            return false;
+        }
+
+        memcpy(p_argv, argv[i], len);
+        p_argv[len - 1] = 0;
+        argv_ptrs[i] = p_argv;
+        p_argv += len;
+    }
+
+    // Write argc and argv pointers to the stack.
+    long* p_argc = cast(long*) (stack_top - 2 * PAGESIZE);
+    newsp = cast(uintptr) p_argc;
+    *p_argc++ = argc;
+    char** p_argvp = cast(char**) p_argc;
+    for (int i = 0; i < argc; i++) {
+        if (cast(uintptr) p_argvp >= cast(uintptr) stack_top - PAGESIZE) {
+            return false;
+        }
+        p_argvp[i] = argv_ptrs[i];
+    }
+    p_argvp[argc] = null;
+    // Empty envp.
+    char** p_envp = cast(char**) &p_argvp[argc + 1];
+    *p_envp++ = null;
+
+    // Set up auxv.
+    Auxv* av = cast(Auxv*) p_envp;
+    *av++ = Auxv(AT_SECURE, 0);
+    *av++ = Auxv(AT_BASE, info.elfbase);
+    *av++ = Auxv(AT_PHDR, info.elfbase + info.elfphoff);
+    *av++ = Auxv(AT_PHNUM, info.elfphnum);
+    *av++ = Auxv(AT_PHENT, info.elfphentsize);
+    *av++ = Auxv(AT_ENTRY, info.elfentry);
+    *av++ = Auxv(AT_EXECFN, cast(ulong) p_argvp[0]);
+    *av++ = Auxv(AT_PAGESZ, PAGESIZE);
+    *av++ = Auxv(AT_NULL, 0);
+    return true;
 }
 
 bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)** envp) {
-    return false;
+    LFIProcInfo info;
+    int err;
+    LFIProc* lp = lfi_add_proc(lfiengine, buf.ptr, buf.length, p, &info, &err);
+    if (!lp)
+        return false;
+
+    uintptr sp;
+    stacksetup(argc, argv, info, sp);
+
+    lfi_proc_init_regs(lp, info.elfentry, sp);
+
+    p.lp = lp;
+    p.base = lfi_proc_base(lp);
+    p.brkp = info.lastva;
+    p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
+
+    p.state = PState.RUNNABLE;
+
+    return true;
 }
 
 void procyield(Proc* p) {
@@ -59,13 +177,13 @@ void procblock(Proc* p, Queue* q, PState s) {
 }
 
 void procentry(Proc* p) {
-    // lfi_proc_start(p.lp, p.);
+    lfi_proc_start(p.lp, &p.kstack[$-16]);
 }
 
-// void procexec(Proc* p) {
-//     p.ctx = taskctx(p.kstackp, &procentry, p.kstackbase);
-//     kstart(null, null, &schedctx);
-// }
+void procexec(Proc* p) {
+    p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
+    kstart(null, null, &schedctx);
+}
 
 int procpid(Proc* p) {
     return cast(int) (p.base >> 32);

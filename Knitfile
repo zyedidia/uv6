@@ -25,6 +25,7 @@ local dsrc = knit.join(
     knit.glob(f"arch/$arch/*.d"),
     knit.glob("core/*.d"),
     knit.glob("alloc/*.d"),
+    knit.glob("lfi/*.d"),
     knit.glob("buddy/*.d"),
     knit.glob("cwalk/*.d")
 )
@@ -60,7 +61,7 @@ local dflags = {
 
 local flags = {
     dc = dflags[dc],
-    ld := -Wl,--gc-sections -fno-pic -llfiverify
+    ld := -Wl,--gc-sections -fno-pic -llfi -llfiverify
 }
 
 if pagesize == "16384" then
