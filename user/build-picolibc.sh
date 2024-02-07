@@ -18,7 +18,6 @@ meson setup --cross-file ../lfi.txt \
     -Dprefix=$PWD/install \
     -Dincludedir=include \
     -Dlibdir=lib \
-    -Dformat-default=long-long \
     -Dthread-local-storage=false \
     -Datomic-ungetc=false \
     -Dspecsdir=none \

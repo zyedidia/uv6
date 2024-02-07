@@ -6,7 +6,7 @@ return b{
     $ all:VB: hello
 
     $ %: %.o syscall.o crt/rcrt1.o
-        $cc -nostdlib -L$picolibc_lib $input -lc -static -o $output
+        $cc -nostartfiles -L$picolibc_lib $input -lc -o $output
     $ %.o: %.S
         $cc -c $input -o $output
     $ %.o: %.c
