@@ -38,6 +38,7 @@ enum Err {
     FAULT = -14,
     INVAL = -22,
     MFILE = -24,
+    NPIPE = -25,
     NOSYS = -38,
 }
 
@@ -202,30 +203,32 @@ uintptr syspipe(Proc* p, ulong[6] args) {
         int[2] fd;
     }
 
+    bool success;
     Pipefd* pipefd = procobj!(Pipefd)(p, args[0]);
     if (pipefd == null)
         return Err.FAULT;
+
     int fd0, fd1;
     FDFile* f0, f1;
     if (!pipenew(f0, f1))
-        goto err1;
+        return Err.NPIPE;
+    scope(exit) if (!success) {
+        fdrelease(f0);
+        fdrelease(f1);
+    }
+
     fd0 = fdalloc(&p.fdtable);
     if (fd0 < 0)
-        goto err2;
+        return Err.MFILE;
+    scope(exit) if (!success) fdremove(&p.fdtable, fd0);
+
     fd1 = fdalloc(&p.fdtable);
     if (fd1 < 0)
-        goto err3;
+        return Err.MFILE;
     pipefd.fd[0] = fd0;
     pipefd.fd[1] = fd1;
+    success = true;
     return 0;
-
-err3:
-    fdremove(&p.fdtable, fd0);
-err2:
-    fdrelease(f0);
-    fdrelease(f1);
-err1:
-    return -1;
 }
 
 uintptr syskill(Proc* p, ulong[6] args) {

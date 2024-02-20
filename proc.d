@@ -52,18 +52,18 @@ Proc* procnewchild(Proc* parent) {
 }
 
 Proc* procnewfile(const(char)* path, int argc, const(char)** argv, const(char)** envp) {
+    bool success;
+
     Proc* p = procnewempty();
     if (!p)
-        goto err1;
+        return null;
+    scope(exit) if (!success) procfree(p);
     if (!procfile(p, path, argc, argv, envp))
-        goto err2;
+        return null;
     fdinit(&p.fdtable);
-    return p;
 
-err2:
-    procfree(p);
-err1:
-    return null;
+    success = true;
+    return p;
 }
 
 void procfree(Proc* p) {
