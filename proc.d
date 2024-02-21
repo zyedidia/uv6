@@ -144,9 +144,15 @@ bool stacksetup(int argc, const(char)** argv, ref LFIProcInfo info, out uintptr 
 }
 
 bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)** envp) {
+    bool success;
+
+    LFIProc* lp = lfi_new_proc();
+    if (!lp)
+        return false;
+    scope(exit) if (!success) free(lp);
+
     LFIProcInfo info;
-    int err;
-    LFIProc* lp = lfi_add_proc(lfiengine, buf.ptr, buf.length, p, &info, &err);
+    int err = lfi_add_proc(lp, lfiengine, buf.ptr, buf.length, p, &info);
     if (!lp)
         return false;
 
@@ -161,6 +167,8 @@ bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)**
     p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
 
     p.state = PState.RUNNABLE;
+
+    success = true;
 
     return true;
 }
@@ -177,7 +185,7 @@ void procblock(Proc* p, Queue* q, PState s) {
 }
 
 void procentry(Proc* p) {
-    lfi_proc_start(p.lp, &p.kstack[$-16]);
+    lfi_proc_start(p.lp);
 }
 
 void procexec(Proc* p) {

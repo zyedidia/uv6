@@ -101,7 +101,9 @@ extern (C) {
 
     ulong lfi_num_procs(LFI* lfi);
 
-    LFIProc* lfi_add_proc(LFI* lfi, ubyte* prog, usize size, void* ctxp, LFIProcInfo* info, int* err);
+    LFIProc* lfi_new_proc();
+
+    int lfi_add_proc(LFIProc* proc, LFI* lfi, ubyte* prog, usize size, void* ctxp, LFIProcInfo* info);
 
     void lfi_remove_proc(LFI* lfi, LFIProc* proc);
 
@@ -109,7 +111,9 @@ extern (C) {
 
     void lfi_proc_init_regs(LFIProc* proc, uintptr entry, uintptr sp);
 
-    void lfi_proc_start(LFIProc* proc, void* kstackp);
+    int lfi_proc_start(LFIProc* proc);
+
+    void lfi_proc_exit(LFIProc* proc, int code);
 
     LFIRegs* lfi_proc_get_regs(LFIProc* proc);
 
