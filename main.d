@@ -8,7 +8,7 @@ import lfi;
 import sys;
 
 enum Arg {
-    NOVERIFY = "noverify",
+    NOVERIFY = "no-verify",
 }
 
 struct Flags {

@@ -40,6 +40,8 @@ Context taskctx(void* sp, void* entry, void* spbase) {
 
 __gshared {
     Queue runq;
+    Queue exitq;
+    Queue waitq;
     Context schedctx;
 }
 

@@ -2,6 +2,7 @@ module proc;
 
 import core.lib;
 import core.alloc;
+import core.vector;
 
 import sched;
 import lfi;
@@ -34,6 +35,7 @@ struct Proc {
     uintptr base;
     FDTable fdtable;
     Proc* parent;
+    Vector!(Proc*) children;
     uintptr brkp;
     Cwd cwd;
     PState state;
@@ -45,7 +47,11 @@ struct Proc {
 }
 
 Proc* procnewempty() {
-    return knew!(Proc)();
+    Proc* p = knew!(Proc)();
+    if (!p)
+        return null;
+    p.cwd.fd = AT_FDCWD;
+    return p;
 }
 
 Proc* procnewchild(Proc* parent) {
@@ -168,7 +174,6 @@ bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)**
     p.base = lfi_proc_base(lp);
     p.brkp = info.lastva;
     p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
-    p.cwd.fd = AT_FDCWD;
 
     p.state = PState.RUNNABLE;
 

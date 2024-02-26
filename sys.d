@@ -7,6 +7,8 @@ import lfi;
 import file;
 import fd;
 import pipe;
+import sched;
+import queue;
 
 enum Sys {
     FORK   = 1,
@@ -35,6 +37,7 @@ enum Sys {
 enum Err {
     PERM  = -1,
     BADF  = -9,
+    CHILD = -10,
     FAULT = -14,
     INVAL = -22,
     MFILE = -24,
@@ -202,7 +205,32 @@ uintptr sysfork(Proc* p, ulong[6] args) {
 }
 
 uintptr syswait(Proc* p, ulong[6] args) {
-    assert(0, "wait");
+    int pid = cast(int) args[0];
+    uintptr wstatus = procaddr(p, args[1]);
+
+    if (pid != -1 || wstatus != 0)
+        return Err.INVAL;
+    if (p.children.length == 0)
+        return Err.CHILD;
+
+    while (1) {
+        foreach (ref zombie; exitq) {
+            if (zombie.parent == p) {
+                int zpid = procpid(zombie);
+                for (usize i = 0; i < p.children.length; i++) {
+                    if (p.children[i] == zombie) {
+                        p.children.unordered_remove(i);
+                        break;
+                    }
+                }
+
+                qremove(&exitq, zombie);
+                procfree(zombie);
+                return zpid;
+            }
+        }
+        procblock(p, &waitq, PState.BLOCKED);
+    }
 }
 
 uintptr syspipe(Proc* p, ulong[6] args) {

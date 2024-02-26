@@ -5,7 +5,7 @@ local picolibc_include := build/install/include
 return b{
     $ all:VB: hello
 
-    $ %: %.o syscall.o crt/rcrt1.o
+    $ %.elf: %.o syscall.o crt/rcrt1.o
         $cc -nostartfiles -L$picolibc_lib $input -lc -o $output
     $ %.o: %.S
         $cc -c $input -o $output
