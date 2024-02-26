@@ -87,7 +87,7 @@ uintptr sysopen(Proc* p, ulong[6] args) {
     const(char)* path = procpath(p, args[0]);
     if (!path)
         return Err.FAULT;
-    FDFile* f = filenew(path, cast(int) args[1], cast(int) args[2]);
+    FDFile* f = filenew(p.cwd.fd, path, cast(int) args[1], cast(int) args[2]);
     if (!f)
         return Err.INVAL;
     int fd = fdalloc(&p.fdtable);
@@ -145,7 +145,10 @@ uintptr sysfstat(Proc* p, ulong[6] args) {
 }
 
 uintptr syschdir(Proc* p, ulong[6] args) {
-    assert(0, "chdir");
+    const(char)* path = procpath(p, args[0]);
+    if (!path)
+        return Err.FAULT;
+    return procchdir(p, path);
 }
 
 uintptr sysdup(Proc* p, ulong[6] args) {
@@ -157,7 +160,11 @@ uintptr sysgetpid(Proc* p, ulong[6] args) {
 }
 
 uintptr syssbrk(Proc* p, ulong[6] args) {
-    assert(0, "sbrk");
+    usize incr = args[0];
+
+    uintptr ret = p.brkp;
+    p.brkp = procaddr(p, p.brkp + incr);
+    return ret;
 }
 
 uintptr syssleep(Proc* p, ulong[6] args) {
@@ -176,7 +183,7 @@ uintptr sysunlink(Proc* p, ulong[6] args) {
     const(char)* path = procpath(p, args[0]);
     if (!path)
         return Err.FAULT;
-    return syserr(unlinkat(AT_FDCWD, path, 0));
+    return syserr(unlinkat(p.cwd.fd, path, 0));
 }
 
 uintptr syslink(Proc* p, ulong[6] args) {
@@ -187,7 +194,7 @@ uintptr sysmkdir(Proc* p, ulong[6] args) {
     const(char)* path = procpath(p, args[0]);
     if (!path)
         return Err.FAULT;
-    return syserr(mkdirat(AT_FDCWD, path, cast(int) args[1]));
+    return syserr(mkdirat(p.cwd.fd, path, cast(int) args[1]));
 }
 
 uintptr sysfork(Proc* p, ulong[6] args) {

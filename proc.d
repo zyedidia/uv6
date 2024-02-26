@@ -8,6 +8,7 @@ import lfi;
 import fd;
 import queue;
 import elf;
+import cwalk;
 
 enum PState {
     RUNNABLE,
@@ -70,11 +71,13 @@ void procfree(Proc* p) {
     if (p.lp)
         lfi_remove_proc(lfiengine, p.lp);
     fdclear(&p.fdtable);
+    if (p.cwd.fd >= 0)
+        close(p.cwd.fd);
     kfree(p);
 }
 
 bool procfile(Proc* p, const(char)* path, int argc, const(char)** argv, const(char)** envp) {
-    int fd = openat(AT_FDCWD, path, O_RDONLY, 0);
+    int fd = openat(p.cwd.fd, path, O_RDONLY, 0);
     if (fd < 0)
         return false;
     void* f = fdopen(fd, "rb");
@@ -165,6 +168,7 @@ bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)**
     p.base = lfi_proc_base(lp);
     p.brkp = info.lastva;
     p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
+    p.cwd.fd = AT_FDCWD;
 
     p.state = PState.RUNNABLE;
 
@@ -220,4 +224,21 @@ const(char)* procpath(Proc* p, uintptr path) {
 T* procobj(T)(Proc* p, uintptr ptr) {
     ubyte[] buf = procbuf(p, ptr, T.sizeof);
     return cast(T*) buf.ptr;
+}
+
+int procchdir(Proc* p, const(char)* path) {
+    int fd = openat(p.cwd.fd, path, O_DIRECTORY | O_PATH, 0);
+    if (fd < 0)
+        return fd;
+    if (p.cwd.fd >= 0)
+        close(p.cwd.fd);
+
+    if (!cwk_path_is_absolute(path)) {
+        char[PATH_MAX] buffer;
+        cwk_path_join(p.cwd.name.ptr, path, buffer.ptr, buffer.length);
+        path = buffer.ptr;
+    }
+    memcpy(p.cwd.name.ptr, path, p.cwd.name.length);
+    p.cwd.fd = fd;
+    return 0;
 }

@@ -7,8 +7,8 @@ import fd;
 import proc;
 import sys;
 
-FDFile* filenew(const(char)* name, int flags, int mode) {
-    int kfd = syserr(openat(AT_FDCWD, name, flags, mode));
+FDFile* filenew(int dirfd, const(char)* name, int flags, int mode) {
+    int kfd = syserr(openat(dirfd, name, flags, mode));
     if (kfd < 0)
         return null;
     return filefdnew(kfd);
