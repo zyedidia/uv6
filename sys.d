@@ -155,7 +155,14 @@ uintptr syschdir(Proc* p, ulong[6] args) {
 }
 
 uintptr sysdup(Proc* p, ulong[6] args) {
-    assert(0, "dup");
+    int oldfd = cast(int) args[0];
+    FDFile* f = fdget(&p.fdtable, oldfd);
+    if (!f)
+        return Err.BADF;
+    int newfd = fdalloc(&p.fdtable);
+    if (newfd < 0)
+        return Err.MFILE;
+    return newfd;
 }
 
 uintptr sysgetpid(Proc* p, ulong[6] args) {
