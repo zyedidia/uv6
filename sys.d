@@ -38,6 +38,7 @@ enum Err {
     PERM  = -1,
     BADF  = -9,
     CHILD = -10,
+    NOMEM = -12,
     FAULT = -14,
     INVAL = -22,
     MFILE = -24,
@@ -82,8 +83,22 @@ uintptr syscall(void* p, ulong num,
 }
 
 uintptr sysexit(Proc* p, ulong[6] args) {
-    printf("exited\n");
-    exit(1);
+    if (initp != p) {
+        // Exiting process's children all get reparented to initp.
+        foreach (ref child; p.children) {
+            child.parent = initp;
+            ensure(initp.children.append(child));
+        }
+        p.children.clear();
+
+        // Alert parent of exiting process.
+        if (p.parent && p.parent.state == PState.BLOCKED && p.parent.wq == &waitq)
+            qwake(&waitq, p.parent);
+    }
+    procblock(p, &exitq, PState.EXITED);
+
+    // should not return
+    assert(0, "exited");
 }
 
 uintptr sysopen(Proc* p, ulong[6] args) {
@@ -208,15 +223,21 @@ uintptr sysmkdir(Proc* p, ulong[6] args) {
 }
 
 uintptr sysfork(Proc* p, ulong[6] args) {
-    assert(0, "fork");
+    Proc* child = procnewchild(p);
+    if (!child)
+        return Err.NOMEM;
+    lfi_proc_get_regs(child.lp).x0 = 0;
+    if (!p.children.append(child)) {
+        procfree(child);
+        return Err.NOMEM;
+    }
+
+    int pid = procpid(child);
+    qpushf(&runq, child);
+    return pid;
 }
 
 uintptr syswait(Proc* p, ulong[6] args) {
-    int pid = cast(int) args[0];
-    uintptr wstatus = procaddr(p, args[1]);
-
-    if (pid != -1 || wstatus != 0)
-        return Err.INVAL;
     if (p.children.length == 0)
         return Err.CHILD;
 

@@ -50,12 +50,29 @@ Proc* procnewempty() {
     Proc* p = knew!(Proc)();
     if (!p)
         return null;
+    p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
     p.cwd.fd = AT_FDCWD;
+    ensure(getcwd(&p.cwd.name[0], p.cwd.name.length) != null);
     return p;
 }
 
 Proc* procnewchild(Proc* parent) {
-    return null;
+    Proc* p = procnewempty();
+    if (!p)
+        return null;
+    p.lp = lfi_new_proc();
+    if (!p.lp)
+        return null;
+    if (lfi_proc_copy(lfiengine, &p.lp, parent.lp, p) < 0)
+        return null;
+
+    fdcopy(&parent.fdtable, p.fdtable);
+    p.brkp = procaddr(p, parent.brkp);
+    p.parent = parent;
+    p.state = PState.RUNNABLE;
+    p.base = lfi_proc_base(p.lp);
+
+    return p;
 }
 
 Proc* procnewfile(const(char)* path, int argc, const(char)** argv, const(char)** envp) {
@@ -164,16 +181,15 @@ bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)**
     int err = lfi_add_proc(lp, lfiengine, buf.ptr, buf.length, p, &info);
     if (!lp)
         return false;
+    p.lp = lp;
+    p.base = lfi_proc_base(lp);
 
     uintptr sp;
     stacksetup(argc, argv, info, sp);
 
     lfi_proc_init_regs(lp, info.elfentry, sp);
 
-    p.lp = lp;
-    p.base = lfi_proc_base(lp);
     p.brkp = info.lastva;
-    p.ctx = taskctx(&p.kstack[$-16], &procentry, &p.kstack[0]);
 
     p.state = PState.RUNNABLE;
 

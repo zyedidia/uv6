@@ -43,6 +43,7 @@ __gshared {
     Queue exitq;
     Queue waitq;
     Context schedctx;
+    Proc* initp;
 }
 
 extern (C) void kswitch(Proc* p, Context* oldc, Context* newc);
@@ -59,6 +60,7 @@ Proc* schedrunnable() {
 }
 
 void schedule(Proc* init) {
+    initp = init;
     qpushf(&runq, init);
 
     while (true) {

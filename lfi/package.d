@@ -117,7 +117,7 @@ extern (C) {
 
     LFIRegs* lfi_proc_get_regs(LFIProc* proc);
 
-    LFIProc* lfi_proc_copy(LFIProc* proc, void* new_ctxp);
+    int lfi_proc_copy(LFI* lfi, LFIProc** childp, LFIProc* proc, void* new_ctxp);
 
     int lfi_proc_exec(LFIProc* proc, ubyte* prog, usize size, LFIProcInfo* info);
 
