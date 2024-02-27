@@ -101,9 +101,7 @@ extern (C) {
 
     ulong lfi_num_procs(LFI* lfi);
 
-    LFIProc* lfi_new_proc();
-
-    int lfi_add_proc(LFIProc* proc, LFI* lfi, ubyte* prog, usize size, void* ctxp, LFIProcInfo* info);
+    int lfi_add_proc(LFI* lfi, LFIProc** proc, void* ctxp);
 
     void lfi_remove_proc(LFI* lfi, LFIProc* proc);
 

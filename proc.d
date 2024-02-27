@@ -29,6 +29,13 @@ struct Cwd {
     int fd;
 }
 
+void cwdcopy(Cwd* cwd, ref Cwd to) {
+    int fd = open(cwd.name.ptr, O_DIRECTORY | O_PATH, 0);
+    ensure(fd >= 0);
+    memcpy(to.name.ptr, cwd.name.ptr, cwd.name.length);
+    to.fd = fd;
+}
+
 struct Proc {
     Context ctx;
     LFIProc* lp;
@@ -61,30 +68,36 @@ Proc* procnewchild(Proc* parent) {
     Proc* p = procnewempty();
     if (!p)
         return null;
-    p.lp = lfi_new_proc();
-    if (!p.lp)
-        return null;
     if (lfi_proc_copy(lfiengine, &p.lp, parent.lp, p) < 0)
         return null;
-
     p.base = lfi_proc_base(p.lp);
+
     fdcopy(&parent.fdtable, p.fdtable);
+    cwdcopy(&parent.cwd, p.cwd);
     p.brkbase = procaddr(p, parent.brkbase);
     p.brksize = parent.brksize;
+    if (p.brksize != 0)
+        ensure(mmap(cast(void*) p.brkbase, p.brksize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) != cast(void*) -1);
     p.parent = parent;
     p.state = PState.RUNNABLE;
 
     return p;
 }
 
-Proc* procnewfile(const(char)* path, int argc, const(char)** argv, const(char)** envp) {
+Proc* procnewfile(const(char)* path, int argc, const(char)** argv) {
     bool success;
 
     Proc* p = procnewempty();
     if (!p)
         return null;
     scope(exit) if (!success) procfree(p);
-    if (!procfile(p, path, argc, argv, envp))
+
+    int err = lfi_add_proc(lfiengine, &p.lp, p);
+    if (err < 0)
+        return null;
+    p.base = lfi_proc_base(p.lp);
+
+    if (!procfile(p, path, argc, argv))
         return null;
     fdinit(&p.fdtable);
 
@@ -92,7 +105,13 @@ Proc* procnewfile(const(char)* path, int argc, const(char)** argv, const(char)**
     return p;
 }
 
+void procunmap(Proc* p) {
+    if (p.brksize > 0)
+        ensure(munmap(cast(void*) p.brkbase, p.brksize) == 0);
+}
+
 void procfree(Proc* p) {
+    procunmap(p);
     if (p.lp)
         lfi_remove_proc(lfiengine, p.lp);
     fdclear(&p.fdtable);
@@ -101,7 +120,7 @@ void procfree(Proc* p) {
     kfree(p);
 }
 
-bool procfile(Proc* p, const(char)* path, int argc, const(char)** argv, const(char)** envp) {
+bool procfile(Proc* p, const(char)* path, int argc, const(char)** argv) {
     int fd = openat(p.cwd.fd, path, O_RDONLY, 0);
     if (fd < 0)
         return false;
@@ -114,14 +133,14 @@ bool procfile(Proc* p, const(char)* path, int argc, const(char)** argv, const(ch
     ensure(fclose(f) == 0);
     scope(exit) kfree(buf);
 
-    if (!procsetup(p, buf, argc, argv, envp))
+    if (!procsetup(p, buf, argc, argv))
         return false;
 
     return true;
 }
 
 bool stacksetup(int argc, const(char)** argv, ref LFIProcInfo info, out uintptr newsp) {
-    // Set up argv and envp.
+    // Set up argv.
     char*[ARGC_MAX] argv_ptrs;
 
     void* stack_top = info.stack + info.stacksize;
@@ -171,25 +190,16 @@ bool stacksetup(int argc, const(char)** argv, ref LFIProcInfo info, out uintptr 
     return true;
 }
 
-bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)** envp) {
+bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv) {
     bool success;
 
-    LFIProc* lp = lfi_new_proc();
-    if (!lp)
-        return false;
-    scope(exit) if (!success) free(lp);
-
     LFIProcInfo info;
-    int err = lfi_add_proc(lp, lfiengine, buf.ptr, buf.length, p, &info);
-    if (!lp)
-        return false;
-    p.lp = lp;
-    p.base = lfi_proc_base(lp);
+    lfi_proc_exec(p.lp, buf.ptr, buf.length, &info);
 
     uintptr sp;
     stacksetup(argc, argv, info, sp);
 
-    lfi_proc_init_regs(lp, info.elfentry, sp);
+    lfi_proc_init_regs(p.lp, info.elfentry, sp);
 
     p.brkbase = info.lastva;
 
@@ -239,6 +249,16 @@ const(char)* procpath(Proc* p, uintptr path) {
     // TODO: checks
     const(char)* str = cast(const(char)*) path;
     usize len = strnlen(str, PATH_MAX);
+    if (str[len] != 0)
+        return null;
+    return str;
+}
+
+const(char)* procarg(Proc* p, uintptr arg) {
+    arg = procaddr(p, arg);
+    // TODO: checks
+    const(char)* str = cast(const(char)*) arg;
+    usize len = strnlen(str, ARGV_MAX);
     if (str[len] != 0)
         return null;
     return str;

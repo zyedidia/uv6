@@ -78,7 +78,7 @@ extern (C) int main(int argc, const(char)** argv) {
     fprintf(stderr, "max procs: %ld\n", lfi_max_procs(lfiengine));
 
     const(char)* file = argv[i];
-    Proc* p = procnewfile(file, argc - i, &argv[i], null);
+    Proc* p = procnewfile(file, argc - i, &argv[i]);
     if (!p) {
         fprintf(stderr, "error: could not load %s\n", argv[i]);
         return 1;

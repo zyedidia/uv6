@@ -2,6 +2,7 @@ module sys;
 
 import core.lib;
 import core.math;
+import core.alloc;
 
 import proc;
 import lfi;
@@ -39,6 +40,7 @@ enum Sys {
 
 enum Err {
     PERM  = -1,
+    NOENT = -2,
     BADF  = -9,
     CHILD = -10,
     NOMEM = -12,
@@ -314,8 +316,76 @@ uintptr syskill(Proc* p, ulong[6] args) {
     assert(0, "kill");
 }
 
+const(char)* copypath(const(char)* path) {
+    usize len = strnlen(path, PATH_MAX);
+    char[] newpath = kallocarray!(char)(len + 1);
+    if (!newpath)
+        return null;
+    memcpy(newpath.ptr, path, len);
+    newpath[len] = 0;
+    return newpath.ptr;
+}
+
+const(char)*[] copyargs(Proc* p, const(char)** args) {
+    int n;
+    for (n = 0; args[n] != null && n < ARGC_MAX; n++) {
+        const(char)* arg = procarg(p, cast(uintptr) args[n]);
+        if (!arg)
+            return null;
+        args[n] = arg;
+    }
+
+    bool success;
+
+    const(char)*[] newargs = kallocarray!(const(char)*)(n);
+    if (!newargs)
+        return null;
+    scope(exit) if (!success) kfreearray(newargs);
+
+    for (int i = 0; i < n; i++) {
+        usize len = strnlen(args[i], ARGV_MAX);
+        char[] newarg = kallocarray!(char)(len + 1);
+        if (!newarg)
+            return null;
+        memcpy(newarg.ptr, args[i], len);
+        newarg[len] = 0;
+        newargs[i] = newarg.ptr;
+    }
+    success = true;
+    return newargs;
+}
+
 uintptr sysexecv(Proc* p, ulong[6] args) {
-    return -1;
+    const(char)* path = procpath(p, args[0]);
+    if (!path)
+        return Err.FAULT;
+    uintptr argv = procaddr(p, args[1]);
+
+    // Make sure file exists.
+    int fd = openat(p.cwd.fd, path, O_RDONLY, 0);
+    if (fd < 0)
+        return Err.NOENT;
+    close(fd);
+
+    const(char)* newpath = copypath(path);
+    if (!newpath)
+        return Err.NOMEM;
+    scope(exit) kfree(newpath);
+
+    const(char)*[] kargv = copyargs(p, cast(const(char)**) argv);
+    if (!kargv)
+        return Err.NOMEM;
+    scope(exit) kfreearray(kargv);
+
+    // Free old segments.
+    procunmap(p);
+
+    if (!procfile(p, newpath, cast(int) kargv.length, kargv.ptr))
+        return -1;
+
+    procexec(p);
+    // should not return
+    assert(0, "execv");
 }
 
 uintptr syslseek(Proc* p, ulong[6] args) {
