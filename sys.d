@@ -195,7 +195,6 @@ uintptr syssbrk(Proc* p, ulong[6] args) {
     usize incr = args[0];
 
     uintptr brkp = p.brkbase + p.brksize;
-    uintptr ret = p.brkbase;
     if (brkp + incr < lfi_proc_get_regs(p.lp).sp) {
         void* map;
         if (p.brksize == 0) {
@@ -207,7 +206,7 @@ uintptr syssbrk(Proc* p, ulong[6] args) {
             return -1;
         p.brksize += incr;
     }
-    return ret;
+    return brkp;
 }
 
 uintptr syssleep(Proc* p, ulong[6] args) {

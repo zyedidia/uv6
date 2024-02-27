@@ -490,7 +490,6 @@ nulterminate(struct cmd *cmd)
     break;
 
   case REDIR:
-    /* printf("redir\n"); */
     rcmd = (struct redircmd*)cmd;
     nulterminate(rcmd->cmd);
     *rcmd->efile = 0;
