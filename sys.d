@@ -201,7 +201,7 @@ uintptr syssbrk(Proc* p, ulong[6] args) {
         if (p.brksize == 0) {
             map = mmap(cast(void*) p.brkbase, p.brksize + incr, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
         } else {
-            map = mremap(cast(void*) p.brkbase, p.brksize, p.brksize + incr, MREMAP_FIXED);
+            map = mremap(cast(void*) p.brkbase, p.brksize, p.brksize + incr, 0);
         }
         if (map == cast(void*) -1)
             return -1;

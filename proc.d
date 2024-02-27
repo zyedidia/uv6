@@ -76,8 +76,10 @@ Proc* procnewchild(Proc* parent) {
     cwdcopy(&parent.cwd, p.cwd);
     p.brkbase = procaddr(p, parent.brkbase);
     p.brksize = parent.brksize;
-    if (p.brksize != 0)
+    if (p.brksize != 0) {
         ensure(mmap(cast(void*) p.brkbase, p.brksize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) != cast(void*) -1);
+        memcpy(cast(void*) p.brkbase, cast(void*) parent.brkbase, p.brksize);
+    }
     p.parent = parent;
     p.state = PState.RUNNABLE;
 

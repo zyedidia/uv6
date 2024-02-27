@@ -207,7 +207,7 @@ fork1(void)
   int pid;
 
   pid = fork();
-  if(pid == -1)
+  if(pid < 0)
     panic("fork");
   return pid;
 }
@@ -490,6 +490,7 @@ nulterminate(struct cmd *cmd)
     break;
 
   case REDIR:
+    /* printf("redir\n"); */
     rcmd = (struct redircmd*)cmd;
     nulterminate(rcmd->cmd);
     *rcmd->efile = 0;
