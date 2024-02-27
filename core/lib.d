@@ -88,6 +88,10 @@ enum {
 }
 
 enum {
+    MREMAP_FIXED = 0x2,
+}
+
+enum {
     PROT_NONE  = 0,
     PROT_READ  = 1,
     PROT_WRITE = 2,

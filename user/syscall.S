@@ -12,7 +12,7 @@ syscall wait   3
 syscall pipe   4
 syscall read   5
 syscall kill   6
-syscall exec   7
+syscall execv  7
 syscall fstat  8
 syscall chdir  9
 syscall dup    10
@@ -28,3 +28,4 @@ syscall link   19
 syscall mkdir  20
 syscall close  21
 syscall lseek  22
+syscall getcwd 23

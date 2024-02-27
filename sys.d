@@ -1,6 +1,7 @@
 module sys;
 
 import core.lib;
+import core.math;
 
 import proc;
 import lfi;
@@ -17,7 +18,7 @@ enum Sys {
     PIPE   = 4,
     READ   = 5,
     KILL   = 6,
-    EXEC   = 7,
+    EXECV  = 7,
     FSTAT  = 8,
     CHDIR  = 9,
     DUP    = 10,
@@ -32,6 +33,8 @@ enum Sys {
     LINK   = 19,
     MKDIR  = 20,
     CLOSE  = 21,
+    LSEEK  = 22,
+    GETCWD = 23,
 }
 
 enum Err {
@@ -49,27 +52,29 @@ enum Err {
 alias SyscallFn = uintptr function(Proc* p, ulong[6] args);
 
 SyscallFn[] systbl = [
-    Sys.FORK:   &sysfork,
-    Sys.EXIT:   &sysexit,
-    Sys.WAIT:   &syswait,
-    Sys.PIPE:   &syspipe,
-    Sys.READ:   &sysread,
-    Sys.KILL:   &syskill,
-    Sys.EXEC:   &sysexec,
-    Sys.FSTAT:  &sysfstat,
-    Sys.CHDIR:  &syschdir,
-    Sys.DUP:    &sysdup,
-    Sys.GETPID: &sysgetpid,
-    Sys.SBRK:   &syssbrk,
-    Sys.SLEEP:  &syssleep,
-    Sys.UPTIME: &sysuptime,
-    Sys.OPEN:   &sysopen,
-    Sys.WRITE:  &syswrite,
-    Sys.MKNOD:  &sysmknod,
-    Sys.UNLINK: &sysunlink,
-    Sys.LINK:   &syslink,
-    Sys.MKDIR:  &sysmkdir,
-    Sys.CLOSE:  &sysclose,
+    Sys.FORK:    &sysfork,
+    Sys.EXIT:    &sysexit,
+    Sys.WAIT:    &syswait,
+    Sys.PIPE:    &syspipe,
+    Sys.READ:    &sysread,
+    Sys.KILL:    &syskill,
+    Sys.EXECV:   &sysexecv,
+    Sys.FSTAT:   &sysfstat,
+    Sys.CHDIR:   &syschdir,
+    Sys.DUP:     &sysdup,
+    Sys.GETPID:  &sysgetpid,
+    Sys.SBRK:    &syssbrk,
+    Sys.SLEEP:   &syssleep,
+    Sys.UPTIME:  &sysuptime,
+    Sys.OPEN:    &sysopen,
+    Sys.WRITE:   &syswrite,
+    Sys.MKNOD:   &sysmknod,
+    Sys.UNLINK:  &sysunlink,
+    Sys.LINK:    &syslink,
+    Sys.MKDIR:   &sysmkdir,
+    Sys.CLOSE:   &sysclose,
+    Sys.LSEEK:   &syslseek,
+    Sys.GETCWD:  &sysgetcwd,
 ];
 
 uintptr syscall(void* p, ulong num,
@@ -187,8 +192,19 @@ uintptr sysgetpid(Proc* p, ulong[6] args) {
 uintptr syssbrk(Proc* p, ulong[6] args) {
     usize incr = args[0];
 
-    uintptr ret = p.brkp;
-    p.brkp = procaddr(p, p.brkp + incr);
+    uintptr brkp = p.brkbase + p.brksize;
+    uintptr ret = p.brkbase;
+    if (brkp + incr < lfi_proc_get_regs(p.lp).sp) {
+        void* map;
+        if (p.brksize == 0) {
+            map = mmap(cast(void*) p.brkbase, p.brksize + incr, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        } else {
+            map = mremap(cast(void*) p.brkbase, p.brksize, p.brksize + incr, MREMAP_FIXED);
+        }
+        if (map == cast(void*) -1)
+            return -1;
+        p.brksize += incr;
+    }
     return ret;
 }
 
@@ -298,8 +314,30 @@ uintptr syskill(Proc* p, ulong[6] args) {
     assert(0, "kill");
 }
 
-uintptr sysexec(Proc* p, ulong[6] args) {
-    assert(0, "exec");
+uintptr sysexecv(Proc* p, ulong[6] args) {
+    return -1;
+}
+
+uintptr syslseek(Proc* p, ulong[6] args) {
+    FDFile* f = fdget(&p.fdtable, cast(int) args[0]);
+    if (!f)
+        return Err.BADF;
+    if (f.lseek == null)
+        return Err.PERM;
+    ssize off = args[1];
+    uint whence = cast(uint) args[2];
+    return f.lseek(f.dev, p, off, whence);
+}
+
+uintptr sysgetcwd(Proc* p, ulong[6] args) {
+    if (args[1] == 0)
+        return 0;
+    ubyte[] buf = procbuf(p, args[0], args[1]);
+    if (!buf)
+        return Err.FAULT;
+    memcpy(buf.ptr, p.cwd.name.ptr, min(buf.length, p.cwd.name.length));
+    buf[$-1] = 0;
+    return buf.length - 1;
 }
 
 int syserr(int val) {

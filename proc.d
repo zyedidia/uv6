@@ -36,7 +36,8 @@ struct Proc {
     FDTable fdtable;
     Proc* parent;
     Vector!(Proc*) children;
-    uintptr brkp;
+    uintptr brkbase;
+    usize brksize;
     Cwd cwd;
     PState state;
     void* wq;
@@ -66,11 +67,12 @@ Proc* procnewchild(Proc* parent) {
     if (lfi_proc_copy(lfiengine, &p.lp, parent.lp, p) < 0)
         return null;
 
+    p.base = lfi_proc_base(p.lp);
     fdcopy(&parent.fdtable, p.fdtable);
-    p.brkp = procaddr(p, parent.brkp);
+    p.brkbase = procaddr(p, parent.brkbase);
+    p.brksize = parent.brksize;
     p.parent = parent;
     p.state = PState.RUNNABLE;
-    p.base = lfi_proc_base(p.lp);
 
     return p;
 }
@@ -189,7 +191,7 @@ bool procsetup(Proc* p, ubyte[] buf, int argc, const(char)** argv, const(char)**
 
     lfi_proc_init_regs(lp, info.elfentry, sp);
 
-    p.brkp = info.lastva;
+    p.brkbase = info.lastva;
 
     p.state = PState.RUNNABLE;
 
