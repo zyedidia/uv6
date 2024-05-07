@@ -195,6 +195,7 @@ uintptr syssbrk(Proc* p, ulong[6] args) {
     usize incr = args[0];
 
     uintptr brkp = p.brkbase + p.brksize;
+    // TODO: check brkp + incr < lfi_proc_end(p) -- don't trust sp to be correct
     if (brkp + incr < lfi_proc_get_regs(p.lp).sp) {
         void* map;
         if (p.brksize == 0) {

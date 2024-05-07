@@ -12,12 +12,15 @@ struct LFIOptions {
     usize pagesize;
     usize stacksize;
     SyshandlerFn syshandler;
+    ulong gas;
+    int poc;
 }
 
 struct LFIProcInfo {
     void* stack;
     usize stacksize;
     ulong lastva;
+    ulong extradata;
     ulong elfentry;
     ulong elfbase;
     ulong elfphoff;

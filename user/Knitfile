@@ -6,7 +6,7 @@ return b{
     $ all:VB: hello
 
     $ %.elf: %.o syscall.o crt/rcrt1.o
-        $cc -nostartfiles -L$picolibc_lib $input -lc -o $output
+        $cc -nostartfiles -L$picolibc_lib $input -o $output -Wl,--as-needed -Wl,--no-undefined -Wl,--start-group build/install/lib/libc.a -Wl,--end-group
     $ %.o: %.S
         $cc -c $input -o $output
     $ %.o: %.c
